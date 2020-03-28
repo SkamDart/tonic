@@ -108,7 +108,8 @@ pub(crate) fn compile<P: AsRef<Path>>(
     protos: &[P],
     includes: &[P],
 ) -> std::io::Result<()> {
-    let mut config = Config::new();
+    let mut cfg = Config::new();
+    let config = cfg.compile_well_known_types();
 
     config.out_dir(out_dir);
     for (proto_path, rust_path) in builder.extern_path.iter() {
