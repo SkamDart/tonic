@@ -31,7 +31,6 @@ pub fn generate<T: Service>(service: &T, proto_path: &str) -> TokenStream {
 
             #service_doc
             #[derive(Debug)]
-            #[doc(hidden)]
             pub struct #server_service<T: #server_trait> {
                 inner: _Inner<T>,
             }
@@ -217,8 +216,13 @@ fn generate_methods<T: Service>(service: &T, proto_path: &str) -> TokenStream {
 
     for method in service.methods() {
         let path = format!(
-            "/{}.{}/{}",
+            "/{}{}{}/{}",
             service.package(),
+            if service.package().is_empty() {
+                ""
+            } else {
+                "."
+            },
             service.identifier(),
             method.identifier()
         );
@@ -273,7 +277,7 @@ fn generate_unary<T: Method>(
             fn call(&mut self, request: tonic::Request<#request>) -> Self::Future {
                 let inner = self.0.clone();
                 let fut = async move {
-                    inner.#method_ident(request).await
+                    (*inner).#method_ident(request).await
                 };
                 Box::pin(fut)
             }
@@ -326,7 +330,7 @@ fn generate_server_streaming<T: Method>(
             fn call(&mut self, request: tonic::Request<#request>) -> Self::Future {
                 let inner = self.0.clone();
                 let fut = async move {
-                    inner.#method_ident(request).await
+                    (*inner).#method_ident(request).await
 
                 };
                 Box::pin(fut)
@@ -377,7 +381,7 @@ fn generate_client_streaming<T: Method>(
             fn call(&mut self, request: tonic::Request<tonic::Streaming<#request>>) -> Self::Future {
                 let inner = self.0.clone();
                 let fut = async move {
-                    inner.#method_ident(request).await
+                    (*inner).#method_ident(request).await
 
                 };
                 Box::pin(fut)
@@ -432,7 +436,7 @@ fn generate_streaming<T: Method>(
             fn call(&mut self, request: tonic::Request<tonic::Streaming<#request>>) -> Self::Future {
                 let inner = self.0.clone();
                 let fut = async move {
-                    inner.#method_ident(request).await
+                    (*inner).#method_ident(request).await
                 };
                 Box::pin(fut)
             }

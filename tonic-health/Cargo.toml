@@ -1,6 +1,6 @@
 [package]
 name = "tonic-health"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["James Nugent <james@jen20.com>"]
 edition = "2018"
 license = "MIT"
@@ -20,7 +20,7 @@ transport = ["tonic/transport"]
 [dependencies]
 async-stream = "0.2"
 tokio = { version = "0.2", features = ["sync", "stream"] }
-tonic = { version = "0.2", path = "../tonic", features = ["codegen", "prost"] }
+tonic = { version = "0.3", path = "../tonic", features = ["codegen", "prost"] }
 bytes = "0.5"
 prost = "0.6"
 
@@ -28,4 +28,4 @@ prost = "0.6"
 tokio = { version = "0.2", features = ["rt-core", "macros"]}
 
 [build-dependencies]
-tonic-build = { version = "0.2", path = "../tonic-build" }
+tonic-build = { version = "0.3", path = "../tonic-build" }

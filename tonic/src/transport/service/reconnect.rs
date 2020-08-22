@@ -1,5 +1,5 @@
 use crate::Error;
-use pin_project::{pin_project, project};
+use pin_project::pin_project;
 use std::fmt;
 use std::{
     future::Future,
@@ -18,6 +18,7 @@ where
     state: State<M::Future, M::Response>,
     target: Target,
     error: Option<M::Error>,
+    has_been_connected: bool,
 }
 
 #[derive(Debug)]
@@ -31,18 +32,13 @@ impl<M, Target> Reconnect<M, Target>
 where
     M: Service<Target>,
 {
-    pub(crate) fn new<S, Request>(initial_connection: S, mk_service: M, target: Target) -> Self
-    where
-        M: Service<Target, Response = S>,
-        S: Service<Request>,
-        Error: From<M::Error> + From<S::Error>,
-        Target: Clone,
-    {
+    pub(crate) fn new(mk_service: M, target: Target) -> Self {
         Reconnect {
             mk_service,
-            state: State::Connected(initial_connection),
+            state: State::Idle,
             target,
             error: None,
+            has_been_connected: false,
         }
     }
 }
@@ -90,14 +86,23 @@ where
                         }
                         Poll::Ready(Err(e)) => {
                             trace!("poll_ready; error");
+
                             state = State::Idle;
-                            self.error = Some(e.into());
-                            break;
+
+                            if self.has_been_connected {
+                                self.error = Some(e.into());
+                                break;
+                            } else {
+                                return Poll::Ready(Err(e.into()));
+                            }
                         }
                     }
                 }
                 State::Connected(ref mut inner) => {
                     trace!("poll_ready; connected");
+
+                    self.has_been_connected = true;
+
                     match inner.poll_ready(cx) {
                         Poll::Ready(Ok(())) => {
                             trace!("poll_ready; ready");
@@ -161,7 +166,7 @@ pub(crate) struct ResponseFuture<F, E> {
     inner: Inner<F, E>,
 }
 
-#[pin_project]
+#[pin_project(project = InnerProj)]
 #[derive(Debug)]
 enum Inner<F, E> {
     Future(#[pin] F),
@@ -190,14 +195,12 @@ where
 {
     type Output = Result<T, Error>;
 
-    #[project]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         //self.project().inner.poll(cx).map_err(Into::into)
         let me = self.project();
-        #[project]
         match me.inner.project() {
-            Inner::Future(fut) => fut.poll(cx).map_err(Into::into),
-            Inner::Error(e) => {
+            InnerProj::Future(fut) => fut.poll(cx).map_err(Into::into),
+            InnerProj::Error(e) => {
                 let e = e.take().expect("Polled after ready.").into();
                 Poll::Ready(Err(e))
             }

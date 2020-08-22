@@ -3,6 +3,7 @@ members = [
     "tonic",
     "tonic-build",
     "tonic-health",
+    "tonic-types",
 
     # Non-published crates
     "examples",
@@ -13,5 +14,7 @@ members = [
     "tests/same_name",
     "tests/wellknown",
     "tests/extern_path/uuid",
-    "tests/extern_path/my_application"
+    "tests/ambiguous_methods",
+    "tests/extern_path/my_application",
+    "tests/integration_tests"
 ]

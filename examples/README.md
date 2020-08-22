@@ -44,7 +44,7 @@ $ cargo run --bin authentication-client
 $ cargo run --bin authentication-server
 ```
 
-## Load balance
+## Load Balance
 
 ### Client
 
@@ -56,6 +56,20 @@ $ cargo run --bin load-balance-client
 
 ```bash
 $ cargo run --bin load-balance-server
+```
+
+## Dynamic Load Balance
+
+### Client
+
+```bash
+$ cargo run --bin dynamic-load-balance-client
+```
+
+### Server
+
+```bash
+$ cargo run --bin dynamic-load-balance-server
 ```
 
 ## TLS (rustls)
@@ -80,6 +94,21 @@ $ cargo run --bin tls-server
 $ cargo run --bin health-server
 ```
 
+## Tower Middleware
+
+### Server
+
+```bash
+$ cargo run --bin tower-server
+```
+
+## Autoreloading Server
+
+### Server
+```bash
+systemfd --no-pid -s http::[::1]:50051 -- cargo watch -x 'run --bin autoreload-server'
+```
+
 ### Notes:
 
 If you are using the `codegen` feature, then the following dependencies are
@@ -89,3 +118,7 @@ If you are using the `codegen` feature, then the following dependencies are
 * [prost](https://crates.io/crates/prost)
 * [prost-derive](https://crates.io/crates/prost-derive)
 
+The autoload example requires the following crates installed globally:
+
+* [systemfd](https://crates.io/crates/systemfd)
+* [cargo-watch](https://crates.io/crates/cargo-watch)

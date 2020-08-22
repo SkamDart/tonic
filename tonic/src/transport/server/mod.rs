@@ -18,11 +18,14 @@ use incoming::TcpIncoming;
 #[cfg(feature = "tls")]
 pub(crate) use incoming::TlsStream;
 
+#[cfg(feature = "tls")]
+use crate::transport::Error;
+
 use super::service::{Or, Routes, ServerIo, ServiceBuilderExt};
 use crate::{body::BoxBody, request::ConnectionInfo};
 use futures_core::Stream;
 use futures_util::{
-    future::{self, MapErr},
+    future::{self, Either as FutureEither, MapErr},
     TryFutureExt,
 };
 use http::{HeaderMap, Request, Response};
@@ -38,7 +41,8 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tower::{
-    limit::concurrency::ConcurrencyLimitLayer, timeout::TimeoutLayer, Service, ServiceBuilder,
+    limit::concurrency::ConcurrencyLimitLayer, timeout::TimeoutLayer, util::Either, Service,
+    ServiceBuilder,
 };
 use tracing_futures::{Instrument, Instrumented};
 
@@ -74,6 +78,42 @@ pub struct Router<A, B> {
     routes: Routes<A, B, Request<Body>>,
 }
 
+/// A service that is produced from a Tonic `Router`.
+///
+/// This service implementation will route between multiple Tonic
+/// gRPC endpoints and can be consumed with the rest of the `tower`
+/// ecosystem.
+#[derive(Debug)]
+pub struct RouterService<A, B> {
+    router: Router<A, B>,
+}
+
+impl<A, B> Service<Request<Body>> for RouterService<A, B>
+where
+    A: Service<Request<Body>, Response = Response<BoxBody>> + Clone + Send + 'static,
+    A::Future: Send + 'static,
+    A::Error: Into<crate::Error> + Send,
+    B: Service<Request<Body>, Response = Response<BoxBody>> + Clone + Send + 'static,
+    B::Future: Send + 'static,
+    B::Error: Into<crate::Error> + Send,
+{
+    type Response = Response<BoxBody>;
+    type Future = FutureEither<
+        MapErr<A::Future, fn(A::Error) -> crate::Error>,
+        MapErr<B::Future, fn(B::Error) -> crate::Error>,
+    >;
+    type Error = crate::Error;
+
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    #[inline]
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        self.router.routes.call(req)
+    }
+}
+
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
 pub trait NamedService {
@@ -81,6 +121,10 @@ pub trait NamedService {
     ///
     /// [here]: https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
     const NAME: &'static str;
+}
+
+impl<S: NamedService, T> NamedService for Either<S, T> {
+    const NAME: &'static str = S::NAME;
 }
 
 impl Server {
@@ -97,11 +141,15 @@ impl Server {
     /// Configure TLS for this server.
     #[cfg(feature = "tls")]
     #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
-    pub fn tls_config(self, tls_config: ServerTlsConfig) -> Self {
-        Server {
-            tls: Some(tls_config.tls_acceptor().unwrap()),
+    pub fn tls_config(self, tls_config: ServerTlsConfig) -> Result<Self, Error> {
+        Ok(Server {
+            tls: Some(
+                tls_config
+                    .tls_acceptor()
+                    .map_err(|e| Error::from_source(e))?,
+            ),
             ..self
-        }
+        })
     }
 
     /// Set the concurrency limit applied to on requests inbound per connection.
@@ -224,6 +272,34 @@ impl Server {
         Router::new(self.clone(), svc)
     }
 
+    /// Create a router with the optional `S` typed service as the first service.
+    ///
+    /// This will clone the `Server` builder and create a router that will
+    /// route around different services.
+    ///
+    /// # Note
+    /// Even when the argument given is `None` this will capture *all* requests to this service name.
+    /// As a result, one cannot use this to toggle between two identically named implementations.
+    pub fn add_optional_service<S>(
+        &mut self,
+        svc: Option<S>,
+    ) -> Router<Either<S, Unimplemented>, Unimplemented>
+    where
+        S: Service<Request<Body>, Response = Response<BoxBody>>
+            + NamedService
+            + Clone
+            + Send
+            + 'static,
+        S::Future: Send + 'static,
+        S::Error: Into<crate::Error> + Send,
+    {
+        let svc = match svc {
+            Some(some) => Either::A(some),
+            None => Either::B(Unimplemented::default()),
+        };
+        Router::new(self.clone(), svc)
+    }
+
     pub(crate) async fn serve_with_shutdown<S, I, F, IO, IE>(
         self,
         svc: S,
@@ -335,6 +411,42 @@ where
         Router { server, routes }
     }
 
+    /// Add a new optional service to this router.
+    ///
+    /// # Note
+    /// Even when the argument given is `None` this will capture *all* requests to this service name.
+    /// As a result, one cannot use this to toggle between two identically named implementations.
+    pub fn add_optional_service<S>(
+        self,
+        svc: Option<S>,
+    ) -> Router<Either<S, Unimplemented>, Or<A, B, Request<Body>>>
+    where
+        S: Service<Request<Body>, Response = Response<BoxBody>>
+            + NamedService
+            + Clone
+            + Send
+            + 'static,
+        S::Future: Send + 'static,
+        S::Error: Into<crate::Error> + Send,
+    {
+        let Self { routes, server } = self;
+
+        let svc_name = <S as NamedService>::NAME;
+        let svc_route = format!("/{}", svc_name);
+        let pred = move |req: &Request<Body>| {
+            let path = req.uri().path();
+
+            path.starts_with(&svc_route)
+        };
+        let svc = match svc {
+            Some(some) => Either::A(some),
+            None => Either::B(Unimplemented::default()),
+        };
+        let routes = routes.push(pred, svc);
+
+        Router { server, routes }
+    }
+
     /// Consume this [`Server`] creating a future that will execute the server
     /// on [`tokio`]'s default executor.
     ///
@@ -399,6 +511,11 @@ where
         self.server
             .serve_with_shutdown(self.routes, incoming, Some(signal))
             .await
+    }
+
+    /// Create a tower service out of a router.
+    pub fn into_service(self) -> RouterService<A, B> {
+        RouterService { router: self }
     }
 }
 
@@ -516,6 +633,7 @@ impl Service<Request<Body>> for Unimplemented {
             http::Response::builder()
                 .status(200)
                 .header("grpc-status", "12")
+                .header("content-type", "application/grpc")
                 .body(BoxBody::empty())
                 .unwrap(),
         )
