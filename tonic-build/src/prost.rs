@@ -287,6 +287,10 @@ impl Builder {
         let format = self.format;
 
         config.out_dir(out_dir.clone());
+
+        // HACK
+        config.include_file("lib.rs");
+
         for (proto_path, rust_path) in self.extern_path.iter() {
             config.extern_path(proto_path, rust_path);
         }
