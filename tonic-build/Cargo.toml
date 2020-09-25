@@ -16,7 +16,7 @@ keywords = ["rpc", "grpc", "async", "codegen", "protobuf"]
 
 
 [dependencies]
-prost-build = { optional = true, git = "https://github.com/SkamDart/prost", branch = "feature/prost-build-single-include-file" }
+prost-build = { optional = true, git = "https://github.com/SkamDart/prost", branch = "master" }
 
 syn = "1.0"
 quote = "1.0"
