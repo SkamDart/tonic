@@ -336,6 +336,10 @@ impl Builder {
         if let Some(path) = self.file_descriptor_set_path.as_ref() {
             config.file_descriptor_set_path(path);
         }
+
+        // HACK
+        config.include_file("lib.rs");
+
         for (proto_path, rust_path) in self.extern_path.iter() {
             config.extern_path(proto_path, rust_path);
         }
