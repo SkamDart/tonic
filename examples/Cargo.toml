@@ -152,7 +152,7 @@ path = "src/hyper_warp_multiplex/server.rs"
 
 [dependencies]
 tonic = { path = "../tonic", features = ["tls"] }
-prost = "0.7"
+prost = { git = "https://github.com/SkamDart/prost", branch = "0.7-single-include" }
 tokio = { version = "1.0", features = ["rt-multi-thread", "time", "fs", "macros", "net"] }
 tokio-stream = { version =  "0.1", features = ["net"] }
 async-stream = "0.3"
@@ -168,7 +168,7 @@ tracing-subscriber = { version = "0.2", features = ["tracing-log"] }
 tracing-attributes = "0.1"
 tracing-futures = "0.2"
 # Required for wellknown types
-prost-types = "0.7"
+prost-types = { git = "https://github.com/SkamDart/prost", branch = "0.7-single-include" }
 # Hyper example
 hyper = "0.14"
 warp = "0.3"

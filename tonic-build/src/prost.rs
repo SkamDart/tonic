@@ -344,6 +344,8 @@ impl Builder {
         let format = self.format;
 
         config.out_dir(out_dir.clone());
+        config.include_file("lib.rs");
+
         if let Some(path) = self.file_descriptor_set_path.as_ref() {
             config.file_descriptor_set_path(path);
         }
@@ -365,8 +367,9 @@ impl Builder {
         }
 
         config.service_generator(Box::new(ServiceGenerator::new(self)));
-
+        
         config.compile_protos(protos, includes)?;
+
 
         #[cfg(feature = "rustfmt")]
         {

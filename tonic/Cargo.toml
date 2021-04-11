@@ -57,8 +57,8 @@ http-body = "0.4"
 pin-project = "1.0"
 
 # prost
-prost1 = { package = "prost", version = "0.7", optional = true }
-prost-derive = { version = "0.7", optional = true }
+prost1 = { package = "prost", optional = true, git = "https://github.com/SkamDart/prost", branch = "0.7-single-include" }
+prost-derive = { optional = true, git = "https://github.com/SkamDart/prost", branch = "0.7-single-include" }
 
 # codegen
 async-trait = { version = "0.1.13", optional = true }

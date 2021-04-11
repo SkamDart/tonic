@@ -9,7 +9,7 @@ edition = "2018"
 
 [dependencies]
 tonic = { path = "../../tonic" }
-prost = "0.7"
+prost = { optional = true, git = "https://github.com/SkamDart/prost", branch = "0.7-single-include" }
 
 [build-dependencies]
 tonic-build = { path = "../../tonic-build" }
